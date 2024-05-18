@@ -1,9 +1,12 @@
+use chrono::{offset::Utc, DateTime};
+use csv::{Reader, Writer};
 use reqwest::Client;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use chrono::{DateTime, offset::Utc};
-use csv::{Reader, Writer};
 
+use std::fs::remove_file;
 use std::path::Path;
+
+use tracing::info;
 
 use tokio::task::spawn_blocking;
 
@@ -41,7 +44,7 @@ struct Post {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct  Question {
+struct Question {
     title: String,
     body_raw: String,
     body_cooked: String,
@@ -67,15 +70,18 @@ pub async fn scrape(page: Page) -> Result<(), anyhow::Error> {
             &format!("{url}/latest.json?order=created&page={page}"),
         )
         .await?;
-    
+
         let topics = latest_topics.topic_list.topics;
-    
+
         if topics.is_empty() {
             break;
         }
 
         for (i, topic) in topics.into_iter().enumerate() {
+            info!(forum = url, page = page, topic = i);
+
             let topic_url = format!("{}/t/{}", url, topic.id);
+
             let topic: Topic = get(&client, &format!("{topic_url}.json")).await?;
 
             let post_id = topic
@@ -83,6 +89,7 @@ pub async fn scrape(page: Page) -> Result<(), anyhow::Error> {
                 .ok_or(anyhow::anyhow!("`post_stream` empty"))?
                 .posts[0]
                 .id;
+
             let post: Post = get(&client, &format!("{url}/posts/{post_id}.json")).await?;
 
             let q = Question {
@@ -94,14 +101,17 @@ pub async fn scrape(page: Page) -> Result<(), anyhow::Error> {
                 url: topic_url,
                 source_id: topic.id.to_string(),
             };
+
             questions.push(q);
         }
 
         let name = name.clone();
-        spawn_blocking(move || create_temp_file(&name, page, &questions)).await?;
+        spawn_blocking(move || create_temp_file(&name, page, &questions)).await??;
 
         page += 1;
     }
+
+    spawn_blocking(move || combine_temp_files(&name)).await??;
 
     Ok(())
 }
@@ -110,7 +120,7 @@ async fn get<T: DeserializeOwned>(client: &Client, url: &str) -> Result<T, anyho
     let response = client.get(url).send().await?;
     let body = response.text().await?;
 
-    return  Ok(serde_json::from_str(&body)?);
+    return Ok(serde_json::from_str(&body)?);
 }
 
 fn create_temp_file(name: &str, page: u64, questions: &[Question]) -> Result<(), anyhow::Error> {
@@ -128,7 +138,7 @@ fn create_temp_file(name: &str, page: u64, questions: &[Question]) -> Result<(),
 fn combine_temp_files(name: &str) -> Result<(), anyhow::Error> {
     let mut page = 0;
     let mut questions: Vec<Question> = Vec::new();
-    
+
     loop {
         let path = format!("scrape/{name}-{page}.csv");
         let path = Path::new(&path);
@@ -149,6 +159,27 @@ fn combine_temp_files(name: &str) -> Result<(), anyhow::Error> {
     }
 
     w.flush()?;
+
+    delete_temp_files(name)?;
+
+    Ok(())
+}
+
+fn delete_temp_files(name: &str) -> Result<(), anyhow::Error> {
+    let mut page = 0;
+
+    loop {
+        let path = format!("scrape/{name}-{page}.csv");
+        let path = Path::new(&path);
+
+        if !path.exists() {
+            break;
+        }
+
+        remove_file(path)?;
+
+        page += 1;
+    }
 
     Ok(())
 }

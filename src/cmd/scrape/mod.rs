@@ -2,12 +2,11 @@ use std::str::FromStr;
 
 mod discourse;
 
-
 #[derive(Debug, Clone)]
 pub struct Page {
     pub name: String,
     pub url: String,
-    pub ty: PageType, 
+    pub ty: PageType,
 }
 
 impl FromStr for Page {
@@ -15,11 +14,9 @@ impl FromStr for Page {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let &[name, url, ty] = s.split(';').collect::<Vec<&str>>().as_slice() else {
-            return Err(
-                anyhow::anyhow!(
-                    "expected page to have three parts separated by `;`".to_owned(),
-                ),
-            );
+            return Err(anyhow::anyhow!(
+                "expected page to have three parts separated by `;`".to_owned(),
+            ));
         };
 
         Ok(Self {
@@ -32,7 +29,7 @@ impl FromStr for Page {
 
 #[derive(Debug, Clone)]
 pub enum PageType {
-    Discourse
+    Discourse,
 }
 
 impl FromStr for PageType {
@@ -41,7 +38,7 @@ impl FromStr for PageType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "discourse" => Ok(Self::Discourse),
-            _ =>  Err(anyhow::anyhow!(format!("unknown variant `{s}`"))),
+            _ => Err(anyhow::anyhow!(format!("unknown variant `{s}`"))),
         }
     }
 }

@@ -1,6 +1,11 @@
 use reqwest::Client;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use chrono::{DateTime, offset::Utc};
+use csv::{Reader, Writer};
+
+use std::path::Path;
+
+use tokio::task::spawn_blocking;
 
 use super::Page;
 
@@ -35,6 +40,7 @@ struct Post {
     raw: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 struct  Question {
     title: String,
     body_raw: String,
@@ -90,6 +96,11 @@ pub async fn scrape(page: Page) -> Result<(), anyhow::Error> {
             };
             questions.push(q);
         }
+
+        let name = name.clone();
+        spawn_blocking(move || create_temp_file(&name, page, &questions)).await?;
+
+        page += 1;
     }
 
     Ok(())
@@ -100,4 +111,44 @@ async fn get<T: DeserializeOwned>(client: &Client, url: &str) -> Result<T, anyho
     let body = response.text().await?;
 
     return  Ok(serde_json::from_str(&body)?);
+}
+
+fn create_temp_file(name: &str, page: u64, questions: &[Question]) -> Result<(), anyhow::Error> {
+    let mut w = Writer::from_path(format!("scrape/{name}-{page}.csv"))?;
+
+    for q in questions {
+        w.serialize(q)?;
+    }
+
+    w.flush()?;
+
+    Ok(())
+}
+
+fn combine_temp_files(name: &str) -> Result<(), anyhow::Error> {
+    let mut page = 0;
+    let mut questions: Vec<Question> = Vec::new();
+    
+    loop {
+        let path = format!("scrape/{name}-{page}.csv");
+        let path = Path::new(&path);
+
+        if !path.exists() {
+            break;
+        }
+
+        for question in Reader::from_path(path)?.deserialize() {
+            questions.push(question?);
+        }
+        page += 1;
+    }
+    let mut w = Writer::from_path(format!("scrape/{name}.csv"))?;
+
+    for q in questions.into_iter().rev() {
+        w.serialize(q)?;
+    }
+
+    w.flush()?;
+
+    Ok(())
 }

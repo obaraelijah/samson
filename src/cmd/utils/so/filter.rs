@@ -1,4 +1,3 @@
-use axum::http::response;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use reqwest::Client;
@@ -11,6 +10,7 @@ use tracing::{error, info};
 /// run the function again and replace this constant with the newly generated
 /// filter.
 ///
+pub const FILTER: &str = "!GA6rnU)jp95BuY0.ZNgu2js9EcJVQ";
 
 #[derive(Debug, Serialize)]
 struct CreateFilter {
@@ -21,20 +21,41 @@ struct CreateFilter {
 
 impl CreateFilter {
     fn new<B: AsRef<str>, I: AsRef<str>>(base: B, include: Vec<I>, r#unsafe: bool) -> Self {
-        Self { 
-            base: base.as_ref().to_owned(), 
+        Self {
+            base: base.as_ref().to_owned(),
             include: include.into_iter().map(|i| i.as_ref().to_owned()).collect(),
             r#unsafe,
         }
     }
+
+    fn as_form_string(&self) -> String {
+        format!(
+            "base={}&include={}&unsafe={}",
+            urlencoding::encode(&self.base),
+            urlencoding::encode(&self.include.join(";")),
+            self.r#unsafe,
+        )
+    }
 }
 
+#[derive(Debug, Deserialize)]
+struct Wrapper<T: DeserializeOwned> {
+    quota_max: u32,
+    quota_remaining: u32,
+    has_more: bool,
+    #[serde(bound(deserialize = "T: DeserializeOwned"))]
+    items: Vec<T>,
+}
+
+#[derive(Debug, Deserialize)]
 struct Filter {
     filter: String,
     filter_type: FilterType,
     included_fields: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
 enum FilterType {
     Safe,
     Unsafe,
@@ -74,9 +95,24 @@ pub async fn create() -> Result<(), anyhow::Error> {
     let response = client
         .post(url)
         .header("content-type", "application/x-www-form-urlencoded")
-        .body(filter.as())
+        .body(filter.as_form_string())
         .send()
         .await?;
-    Ok(())
 
+    let status = response.status();
+
+    let body = response.text().await?;
+
+    if status.is_success() {
+        let wrapper: Wrapper<Filter> = serde_json::from_str(&body)?;
+        let filter = &wrapper.items[0];
+
+        info!(?filter);
+
+        println!("successfully created filter: {}", filter.filter);
+    } else {
+        error!(?status, body);
+    }
+
+    Ok(())
 }

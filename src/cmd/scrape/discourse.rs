@@ -1,18 +1,8 @@
 use reqwest::Client;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize};
 use chrono::{DateTime, offset::Utc};
 
-#[derive(Debug, Clone)]
-struct Page {
-    name: String,
-    url: String,
-}
-
-impl std::fmt::Display for Page {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        unimplemented!()
-    }
-}
+use super::Page;
 
 #[derive(Debug, Deserialize)]
 struct LatestTopics {

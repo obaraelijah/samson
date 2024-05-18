@@ -1,10 +1,22 @@
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use chrono::{DateTime, offset::Utc};
 
+#[derive(Debug, Clone)]
 struct Page {
     name: String,
     url: String,
+}
+
+impl std::fmt::Display for Page {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        unimplemented!()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct LatestTopics {
+    topic_list: TopicList,
 }
 
 #[derive(Debug, Deserialize)]
@@ -33,6 +45,32 @@ pub async fn scrape(page: Page) -> Result<(), anyhow::Error> {
 
     let client = Client::new();
 
+    loop {
+        let latest_topics: LatestTopics = get(
+            &client,
+            &format!("{url}/latest.json?order=created&page={page}"),
+        ).await?;
+    
+        let topics = latest_topics.topic_list.topics;
+    
+        if topics.is_empty() {
+            break;
+        }
+
+        for (i, topic) in topics.into_iter().enumerate() {
+            let topic_url = format!("{}/t/{}", url, topic.id);
+
+            let topic: Topic = get(&client, &format!("{topic_url}.json")).await?;
+
+        }
+    }
+
     Ok(())
 }
 
+async fn get<T: DeserializeOwned>(client: &Client, url: &str) -> Result<T, anyhow::Error> {
+    let response = client.get(url).send().await?;
+    let body = response.text().await?;
+
+    return  Ok(serde_json::from_str(&body)?);
+}

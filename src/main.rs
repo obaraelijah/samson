@@ -36,6 +36,7 @@ enum UtilCommand {
 
 #[derive(Subcommand)]
 enum SoUtilCommand {
+    Filter,
     Auth,
 }
 
@@ -48,6 +49,13 @@ async fn main() -> Result<(), anyhow::Error> {
     match cli.command {
         Command::Scrape { pages } => {
             cmd::scrape::scrape(pages).await?;
+        }
+        Command::Util {
+            command: UtilCommand::So {
+                command: SoUtilCommand::Filter,
+            },
+        } => {
+            cmd::utils::so::filter::create().await?;
         }
         Command::Util {
             command: UtilCommand::So {

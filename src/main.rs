@@ -20,6 +20,23 @@ enum Command {
         #[arg(value_parser = ValueParser::new(Page::from_str))]
         pages: Vec<Page>,
     },
+    Util {
+        #[command(subcommand)]
+        command: UtilCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum UtilCommand {
+    So {
+        #[command(subcommand)]
+        command: SoUtilCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum SoUtilCommand {
+    Auth,
 }
 
 #[tokio::main]
@@ -31,6 +48,13 @@ async fn main() -> Result<(), anyhow::Error> {
     match cli.command {
         Command::Scrape { pages } => {
             cmd::scrape::scrape(pages).await?;
+        }
+        Command::Util {
+            command: UtilCommand::So {
+                command: SoUtilCommand::Auth,
+            },
+        } => {
+            cmd::utils::so::auth::auth().await?;
         }
     }
 

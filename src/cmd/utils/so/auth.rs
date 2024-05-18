@@ -30,7 +30,7 @@ pub async fn auth() -> Result<(), anyhow::Error> {
             rx.recv().await;
         });
 
-    Command::new("xdg-open").arg(url).spawn()?;
+    Command::new("xdg-open").arg(url).spawn()?; // Opens url on a default browser
 
     tokio::spawn(server).await??;
 

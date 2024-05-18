@@ -1,7 +1,9 @@
+use crate::question::Question;
+
 use chrono::{offset::Utc, DateTime};
 use csv::{Reader, Writer};
 use reqwest::Client;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize};
 
 use std::fs::remove_file;
 use std::path::Path;
@@ -43,16 +45,6 @@ struct Post {
     raw: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct Question {
-    title: String,
-    body_raw: String,
-    body_cooked: String,
-    created: DateTime<Utc>,
-    username: String,
-    url: String,
-    source_id: String,
-}
 
 pub async fn scrape(page: Page) -> Result<(), anyhow::Error> {
     let url = page.url;

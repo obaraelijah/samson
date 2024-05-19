@@ -30,11 +30,9 @@ impl FromStr for Page {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let &[name, url, ty] = s.split(';').collect::<Vec<&str>>().as_slice() else {
-            return Err(
-                anyhow::anyhow!(
-                    "expected page to have three parts separated by `;`".to_owned(),
-                ),
-            );
+            return Err(anyhow::anyhow!(
+                "expected page to have three parts separated by `;`".to_owned(),
+            ));
         };
 
         Ok(Self {

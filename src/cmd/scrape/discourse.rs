@@ -8,11 +8,20 @@ use serde::{de::DeserializeOwned, Deserialize};
 use std::fs::remove_file;
 use std::path::Path;
 
+use regex::Regex;
+
+use once_cell::sync::Lazy;
+
 use tracing::info;
 
+use std::time::Duration;
 use tokio::task::spawn_blocking;
+use tokio::time::sleep;
 
 use super::Page;
+
+static WAIT_SECONDS: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"Please retry again in (?P<s>\d{1,2}) seconds").unwrap());
 
 #[derive(Debug, Deserialize)]
 struct LatestTopics {
@@ -44,7 +53,6 @@ struct Post {
     cooked: String,
     raw: Option<String>,
 }
-
 
 pub async fn scrape(page: Page) -> Result<(), anyhow::Error> {
     let url = page.url;
@@ -109,10 +117,31 @@ pub async fn scrape(page: Page) -> Result<(), anyhow::Error> {
 }
 
 async fn get<T: DeserializeOwned>(client: &Client, url: &str) -> Result<T, anyhow::Error> {
-    let response = client.get(url).send().await?;
-    let body = response.text().await?;
+    loop {
+        let response = client.get(url).send().await?;
 
-    return Ok(serde_json::from_str(&body)?);
+        let status = response.status();
+
+        let body = response.text().await?;
+
+        if status.as_u16() == 429 {
+            let seconds: u64 = WAIT_SECONDS
+                .captures(&body)
+                .ok_or(anyhow::anyhow!("no capture found"))?
+                .name("s")
+                .ok_or(anyhow::anyhow!("no capture name `s` found"))?
+                .as_str()
+                .parse()?;
+
+            info!("sleeping for {seconds} seconds");
+
+            sleep(Duration::from_secs(seconds)).await;
+
+            continue;
+        }
+
+        return Ok(serde_json::from_str(&body)?);
+    }
 }
 
 fn create_temp_file(name: &str, page: u64, questions: &[Question]) -> Result<(), anyhow::Error> {

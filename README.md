@@ -1,3 +1,3 @@
-> Samson
+## Samson
 Cross-post detection bot.
 
